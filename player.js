@@ -15,22 +15,47 @@ elms.forEach(function (elm) {
 });
 
 var xmlhttp = new XMLHttpRequest();
-var jsonUrl = "";
-var reverse = true;
+var currentDir = "";
 
 function directoryToArray(arr) {
   let newFiles = [];
   var i;
   for (i = 0; i < arr.length; i++) {
-    if (arr[i].type == "file") {
-      newFiles.push({ title: arr[i].name, file: jsonUrl + arr[i].name, howl: null });
+    if (arr[i].type == "file" || arr[i].type == "directory") {
+      newFiles.push({ title: arr[i].name, type: arr[i].type, file: jsonUrl + "/" + currentDir + "/" + arr[i].name, howl: null });
     }
   }
-  if(reverse) {
-    return newFiles.reverse();
+
+  if (reverse) {
+    newFiles.push({ title: "..", type: "parent" });
+    newFiles = newFiles.reverse();
   } else {
-    return newFiles;
+    newFiles = newFiles.reverse();
+    newFiles.push({ title: "..", type: "parent" });
+    newFiles = newFiles.reverse();
   }
+  return newFiles
+}
+
+function normalize(path) {
+  path = Array.prototype.join.apply(arguments, ['/'])
+  console.log("1" + path);
+  var sPath;
+  while (sPath !== path) {
+    sPath = n(path);
+    path = n(sPath);
+  }
+  function n(s) {
+    // 'a//b' -> 'a/b'
+    var n1 = s.replace(/\/+/g, '/');
+
+    // 'a/..'
+    var n2 = n1.replace(/\/[\[\]\.\-_A-Za-z0-9\x20-\x2d\x3a-\x40\x7b-\x7e\xA1-\xFF\u0100-\uffff]+\/+\.\.\//g, '');
+    return n2;
+  }
+  var result = path;
+
+  return result;
 }
 
 /**
@@ -40,10 +65,11 @@ function directoryToArray(arr) {
  */
 var Player = function (playlist) {
   this.playlist = playlist;
+  this.index = 1;
   this.loop_mode = 0;
 
   // Display the title of the first track.
-  track.innerHTML = '1. ' + playlist[0].title;
+  track.innerHTML = '' + playlist[1].title;
 
   // Setup the playlist display.
   playlist.forEach(function (song) {
@@ -51,6 +77,31 @@ var Player = function (playlist) {
     div.className = 'list-song';
     div.innerHTML = song.title;
     div.onclick = function () {
+      if (song.type == "parent") {
+        currentDir = normalize(currentDir + "/../");
+        console.log(currentDir);
+        console.log(jsonUrl + currentDir);
+        var url = window.location.href;
+        if (url.lastIndexOf('?') != -1) {
+          url = url.split('?')[0];
+        } else {
+
+        }
+        window.location.href = url + "?path=" + currentDir;
+      }
+      if (song.type == "directory") {
+        currentDir = normalize(currentDir + "/" + song.title);
+        console.log(currentDir);
+        console.log(jsonUrl + currentDir);
+        var url = window.location.href;
+        if (url.lastIndexOf('?') != -1) {
+          url = url.split('?')[0];
+        } else {
+
+        }
+        window.location.href = url + "?path=" + currentDir;
+        return;
+      }
       player.skipTo(playlist.indexOf(song));
     };
     list.appendChild(div);
@@ -134,7 +185,7 @@ Player.prototype = {
     sound.play();
 
     // Update the track display.
-    track.innerHTML = (index + 1) + '. ' + data.title;
+    track.innerHTML = index + '. ' + data.title;
 
     // Show the pause button.
     if (sound.state() === 'loaded') {
@@ -184,7 +235,7 @@ Player.prototype = {
     } else {
       index = self.index + 1;
       if (index >= self.playlist.length) {
-        index = 0;
+        index = 1;
       }
     }
 
@@ -324,7 +375,7 @@ Player.prototype = {
 // Setup our new audio player class and pass it the playlist.
 var player;
 
-function testos() {
+function testos(url) {
   xmlhttp.onreadystatechange = function () {
     if (this.readyState == 4 && this.status == 200) {
       myArr = JSON.parse(this.responseText);
@@ -389,7 +440,7 @@ function testos() {
 
     }
   };
-  xmlhttp.open("GET", jsonUrl, true);
+  xmlhttp.open("GET", url, true);
   xmlhttp.send();
 }
 
@@ -441,4 +492,11 @@ var resize = function () {
 };
 
 window.addEventListener('resize', resize);
-testos();
+var url = window.location.href;
+var path = null;
+if (url.lastIndexOf('?') != -1) {
+  index = url.split('?')[1];
+  currentDir = decodeURIComponent(index.split('=')[1]);
+  console.log(currentDir);
+}
+testos(jsonUrl + currentDir);
