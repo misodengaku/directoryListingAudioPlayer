@@ -9,7 +9,7 @@
  */
 
 // Cache references to DOM elements.
-var elms = ['track', 'timer', 'duration', 'playBtn', 'pauseBtn', 'prevBtn', 'nextBtn', 'playlistBtn', 'volumeBtn', 'progress', 'bar', 'wave', 'loading', 'playlist', 'list', 'volume', 'barEmpty', 'barFull', 'sliderBtn'];
+var elms = ['track', 'timer', 'duration', 'playBtn', 'pauseBtn', 'prevBtn', 'nextBtn', 'playlistBtn', 'loopBtn', 'volumeBtn', 'progress', 'bar', 'wave', 'loading', 'playlist', 'list', 'volume', 'barEmpty', 'barFull', 'sliderBtn'];
 elms.forEach(function (elm) {
   window[elm] = document.getElementById(elm);
 });
@@ -40,7 +40,7 @@ function directoryToArray(arr) {
  */
 var Player = function (playlist) {
   this.playlist = playlist;
-  this.index = 0;
+  this.loop_mode = 0;
 
   // Display the title of the first track.
   track.innerHTML = '1. ' + playlist[0].title;
@@ -98,7 +98,20 @@ Player.prototype = {
           // Stop the wave animation.
           wave.container.style.display = 'none';
           bar.style.display = 'block';
+          if (self.loop_mode == 0) {
+            if ((self.index + 1) < self.playlist.length) {
           self.skip('next');
+            } else {
+              wave.container.style.display = 'none';
+              bar.style.display = 'block';
+              playBtn.style.display = 'block';
+              pauseBtn.style.display = 'none';
+            }
+          } else if (self.loop_mode == 1) {
+            self.skip('next');
+          } else if (self.loop_mode == 2) {
+            self.skipTo(self.index);
+          }
         },
         onpause: function () {
           // Stop the wave animation.
@@ -263,6 +276,26 @@ Player.prototype = {
   },
 
   /**
+   * Toggle the loop mode.
+   */
+  toggleLoopMode: function () {
+    var self = this;
+
+    self.loop_mode = self.loop_mode + 1;
+    if (self.loop_mode > 2) {
+      self.loop_mode = 0;
+    }
+    console.log(loopBtn);
+    if (self.loop_mode == 0) {
+      loopBtn.style.backgroundImage = "url('straight.png')";
+    } else if (self.loop_mode == 1) {
+      loopBtn.style.backgroundImage = "url('loop.png')";
+    } else if (self.loop_mode == 2) {
+      loopBtn.style.backgroundImage = "url('loop_one.png')";
+    }
+  },
+
+  /**
    * Toggle the volume display on/off.
    */
   toggleVolume: function () {
@@ -318,6 +351,9 @@ function testos() {
       });
       playlist.addEventListener('click', function () {
         player.togglePlaylist();
+      });
+      loopBtn.addEventListener('click', function () {
+        player.toggleLoopMode();
       });
       volumeBtn.addEventListener('click', function () {
         player.toggleVolume();
