@@ -15,15 +15,30 @@ elms.forEach(function (elm) {
 });
 
 var xmlhttp = new XMLHttpRequest();
+// var jsonUrl = "http://URL_TO/MUSIC_DIR_ROOT/"
 var currentDir = "";
+var reverse = false;
+var skipUnsupportedFile = true;
+
+function checkSupported(filepath) {
+  var path = filepath.split('/');
+  var filename = path[path.length - 1].split('.');
+  var ext = filename[filename.length - 1]
+
+  return Howler.codecs(ext);
+}
 
 function directoryToArray(arr) {
   let newFiles = [];
   var i;
   for (i = 0; i < arr.length; i++) {
-    if (arr[i].type == "file" || arr[i].type == "directory") {
+    if (arr[i].type == "directory") {
+      newFiles.push({ title: arr[i].name, type: arr[i].type, file: jsonUrl + "/" + currentDir + "/" + arr[i].name, howl: null });
+    } else if (arr[i].type == "file") {
+      if ((skipUnsupportedFile && checkSupported(arr[i].name)) || !skipUnsupportedFile) {
       newFiles.push({ title: arr[i].name, type: arr[i].type, file: jsonUrl + "/" + currentDir + "/" + arr[i].name, howl: null });
     }
+  }
   }
 
   if (reverse) {
@@ -118,6 +133,12 @@ Player.prototype = {
 
     index = typeof index === 'number' ? index : self.index;
     var data = self.playlist[index];
+
+    if (!checkSupported(data.file)) {
+      console.log('unsupported format. skip')
+      self.skip('next');
+      return;
+    }
 
     // If we already loaded this track, use the current one.
     // Otherwise, setup and load a new Howl.
