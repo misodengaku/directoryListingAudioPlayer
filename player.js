@@ -9,7 +9,7 @@
  */
 
 // Cache references to DOM elements.
-var elms = ['track', 'timer', 'duration', 'playBtn', 'pauseBtn', 'prevBtn', 'nextBtn', 'playlistBtn', 'loopBtn', 'volumeBtn', 'progress', 'bar', 'wave', 'loading', 'playlist', 'list', 'volume', 'barEmpty', 'barFull', 'sliderBtn'];
+var elms = ['track', 'timer', 'duration', 'playBtn', 'pauseBtn', 'prevBtn', 'nextBtn', 'playlistBtn', 'loopBtn', 'volumeBtn', 'progress', 'seek', 'bar', 'wave', 'loading', 'playlist', 'list', 'volume', 'barEmpty', 'barFull', 'sliderBtn'];
 elms.forEach(function (elm) {
   window[elm] = document.getElementById(elm);
 });
@@ -36,9 +36,9 @@ function directoryToArray(arr) {
       newFiles.push({ title: arr[i].name, type: arr[i].type, file: jsonUrl + "/" + currentDir + "/" + arr[i].name, howl: null });
     } else if (arr[i].type == "file") {
       if ((skipUnsupportedFile && checkSupported(arr[i].name)) || !skipUnsupportedFile) {
-      newFiles.push({ title: arr[i].name, type: arr[i].type, file: jsonUrl + "/" + currentDir + "/" + arr[i].name, howl: null });
+        newFiles.push({ title: arr[i].name, type: arr[i].type, file: jsonUrl + "/" + currentDir + "/" + arr[i].name, howl: null });
+      }
     }
-  }
   }
 
   if (reverse) {
@@ -72,6 +72,7 @@ function normalize(path) {
 
   return result;
 }
+
 
 /**
  * Player class containing the state of our playlist and where we are in it.
@@ -122,6 +123,8 @@ var Player = function (playlist) {
     list.appendChild(div);
   });
 };
+
+
 Player.prototype = {
   /**
    * Play a song in the playlist.
@@ -147,7 +150,7 @@ Player.prototype = {
     } else {
       sound = data.howl = new Howl({
         src: [data.file],
-        html5: true, // Force to HTML5 so that the audio can stream in (best for large files).
+        html5: false, // Force to HTML5 so that the audio can stream in (best for large files).
         onplay: function () {
           // Display the duration.
           duration.innerHTML = self.formatTime(Math.round(sound.duration()));
@@ -155,27 +158,25 @@ Player.prototype = {
           // Start upating the progress of the track.
           requestAnimationFrame(self.step.bind(self));
 
-          // Start the wave animation if we have already loaded
-          wave.container.style.display = 'block';
-          bar.style.display = 'none';
           pauseBtn.style.display = 'block';
+
+          this.fftInterval = setInterval(function () {
+            var sound = player.playlist[player.index].howl;
+            if (sound.playing()) {
+              player.draw();
+            } else {
+              clearInterval(player.fftInterval);
+            }
+          }, 50);
         },
         onload: function () {
-          // Start the wave animation.
-          wave.container.style.display = 'block';
-          bar.style.display = 'none';
           loading.style.display = 'none';
         },
         onend: function () {
-          // Stop the wave animation.
-          wave.container.style.display = 'none';
-          bar.style.display = 'block';
           if (self.loop_mode == 0) {
             if ((self.index + 1) < self.playlist.length) {
-          self.skip('next');
+              self.skip('next');
             } else {
-              wave.container.style.display = 'none';
-              bar.style.display = 'block';
               playBtn.style.display = 'block';
               pauseBtn.style.display = 'none';
             }
@@ -186,14 +187,8 @@ Player.prototype = {
           }
         },
         onpause: function () {
-          // Stop the wave animation.
-          wave.container.style.display = 'none';
-          bar.style.display = 'block';
         },
         onstop: function () {
-          // Stop the wave animation.
-          wave.container.style.display = 'none';
-          bar.style.display = 'block';
         },
         onseek: function () {
           // Start upating the progress of the track.
@@ -204,6 +199,18 @@ Player.prototype = {
 
     // Begin playing the sound.
     sound.play();
+
+    // Setup analyser pipeline
+    this.analyserNode = Howler.ctx.createAnalyser();
+    this.freqs = new Uint8Array(this.analyserNode.frequencyBinCount);
+    Howler.ctx.createGain = Howler.ctx.createGain || Howler.ctx.createGainNode;
+
+    this.analyserGainNode = Howler.ctx.createGain();
+    this.analyserGainNode.gain.setValueAtTime(1, Howler.ctx.currentTime);
+    this.analyserGainNode.connect(this.analyserNode);
+
+    Howler.masterGain.connect(this.analyserGainNode);
+    Howler.masterGain.connect(Howler.ctx.destination);
 
     // Update the track display.
     track.innerHTML = index + '. ' + data.title;
@@ -401,6 +408,24 @@ function testos(url) {
     if (this.readyState == 4 && this.status == 200) {
       myArr = JSON.parse(this.responseText);
       player = new Player(directoryToArray(myArr));
+      player.draw = function () {
+        this.analyserNode.getByteFrequencyData(this.freqs);
+        this.svg = document.getElementById('js-svg');
+        this.svgPath = this.svg.querySelector('path');
+        const barWidth = this.analyserNode.frequencyBinCount / this.svg.width.baseVal.value * 1.1;
+
+        let d = 'M';
+        this.freqs.forEach((y, i) => {
+          const x = i * barWidth;
+          const value = this.freqs[i];
+          const percent = value / 255;
+          const yBase = i % 2 === 0 ? 1 : -1
+          const height = this.svg.height.baseVal.value / 2 + (this.svg.height.baseVal.value / 2 * percent * -1) * yBase;// * this.gainNode.gain.value;
+          d += `${x} ${height},`;
+        });
+        d += `9999 0,`;
+        this.svgPath.setAttribute('d', d);
+      };
 
       // Bind our player controls.
       playBtn.addEventListener('click', function () {
@@ -415,7 +440,7 @@ function testos(url) {
       nextBtn.addEventListener('click', function () {
         player.skip('next');
       });
-      waveform.addEventListener('click', function (event) {
+      seek.addEventListener('click', function (event) {
         player.seek(event.clientX / window.innerWidth);
       });
       playlistBtn.addEventListener('click', function () {
@@ -455,8 +480,6 @@ function testos(url) {
       volume.addEventListener('mousemove', move);
       volume.addEventListener('touchmove', move);
 
-      // Setup the "waveform" animation.
-      wave.start();
       resize();
 
     }
@@ -468,15 +491,6 @@ function testos(url) {
 
 var move = function (event) { };
 
-var wave = new SiriWave({
-  container: waveform,
-  width: window.innerWidth,
-  height: window.innerHeight * 0.3,
-  cover: true,
-  speed: 0.03,
-  amplitude: 0.7,
-  frequency: 2
-});
 
 var move = function (event) {
   if (window.sliderDown) {
@@ -493,15 +507,6 @@ var move = function (event) {
 var resize = function () {
   var height = window.innerHeight * 0.3;
   var width = window.innerWidth;
-  wave.height = height;
-  wave.height_2 = height / 2;
-  wave.MAX = wave.height_2 - 4;
-  wave.width = width;
-  wave.width_2 = width / 2;
-  wave.width_4 = width / 4;
-  wave.canvas.height = height;
-  wave.canvas.width = width;
-  wave.container.style.margin = -(height / 2) + 'px auto';
 
   // Update the position of the slider.
   var sound = player.playlist[player.index].howl;
