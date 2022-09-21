@@ -28,7 +28,12 @@ Optional change `reverse` to false. If `true` the playlist will be reversed from
 
 ## Motivation
 
-I wanted something super simple to share audio files. Better then normal directory listing where the browser creates a minimal player, but not as big as Airsonic, Funkwhale or Jellyfin. 
+I wanted something super simple to share audio files. Better then normal directory listing where the browser creates a minimal player, but not as big as Airsonic, Funkwhale or Jellyfin.
+
+## implemented features
+* Directory browser
+* Change playback mode (Stop after playlist / Playlist loop / Single track loop)
+* Visual effect (Spectrum)
 
 ## missing
 
